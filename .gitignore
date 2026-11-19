@@ -38,3 +38,7 @@ vendor
 *.pem
 apikey.txt
 *.txt
+
+# Local files
+docs/
+plan/
