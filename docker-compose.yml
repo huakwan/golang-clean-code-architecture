@@ -1,9 +1,9 @@
-version: '3.1'
+version: "3.1"
 
 services:
-
   db:
     image: postgres:15
+    container_name: postgres-15
     environment:
       POSTGRES_PASSWORD: golang-first-api
     ports:
@@ -11,9 +11,9 @@ services:
 
   mongodb:
     image: mongo:6.0.8
+    container_name: mongo-6
     ports:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: golang-first-api
-
