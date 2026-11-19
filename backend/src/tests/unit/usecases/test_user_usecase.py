@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from src.domain.entities.user import (
+    UserEntity,
+    UserLoginRequest,
+    UserLogoutRequest,
+    UserPermissionEntity,
+    UserRefreshTokenRequest,
+    UserRegisterRequest,
+    UserTokenEntity,
+)
+from src.domain.exceptions import AuthenticationError, ConflictError, NotFoundError, ValidationError
+from src.domain.repositories.user_repository import StoredUserRecord
+from src.shared.authentication.jwt_authentication import JWTAuthenticator
+from src.shared.authentication.password import hash_password
+from src.usecases.user.user_usecase import UserUsecase
+
+
+def _sample_user(user_id: int = 1) -> UserEntity:
+    return UserEntity(
+        id=user_id,
+        email="jane@example.com",
+        first_name="Jane",
+        last_name="Doe",
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:00Z",
+    )
+
+
+def _make_usecase(
+    *,
+    repo: MagicMock | None = None,
+    logger: MagicMock | None = None,
+) -> tuple[UserUsecase, MagicMock, JWTAuthenticator, MagicMock]:
+    user_repo = repo or MagicMock()
+    jwt_auth = JWTAuthenticator(
+        secret_key="test-secret-key-at-least-32-bytes-long",
+        app_name="PYTHON DJANGO CLEAN API",
+        access_expires=3600,
+        refresh_expires=86400,
+    )
+    activity_logger = logger or MagicMock()
+    uc = UserUsecase(user_repo=user_repo, jwt_auth=jwt_auth, activity_logger=activity_logger)
+    return uc, user_repo, jwt_auth, activity_logger
+
+
+def test_register_user_creates_user_default_permission_and_logs_activity() -> None:
+    uc, repo, _, logger = _make_usecase()
+    repo.get_user_by_email.return_value = None
+    repo.insert_user.return_value = _sample_user(10)
+
+    user = uc.register_user(
+        UserRegisterRequest("jane@example.com", "secret123", "Jane", "Doe"),
+        ip_address="127.0.0.1",
+    )
+
+    assert user.id == 10
+    repo.insert_user.assert_called_once()
+    repo.insert_user_permission.assert_called_once_with(10, "user")
+    logger.record.assert_called_once()
+    assert logger.record.call_args.kwargs["action"] == "USER_REGISTER"
+    assert logger.record.call_args.kwargs["status"] == "success"
+
+
+def test_register_user_invalid_email_raises_validation_error() -> None:
+    uc, repo, _, _ = _make_usecase()
+    with pytest.raises(ValidationError, match="email pattern is invalid"):
+        uc.register_user(UserRegisterRequest("bad-email", "secret123", "Jane", "Doe"))
+    repo.insert_user.assert_not_called()
+
+
+def test_register_user_duplicate_email_raises_conflict_error() -> None:
+    uc, repo, _, _ = _make_usecase()
+    repo.get_user_by_email.return_value = StoredUserRecord(_sample_user(), "hash")
+    with pytest.raises(ConflictError, match="email already exists"):
+        uc.register_user(UserRegisterRequest("jane@example.com", "secret123", "Jane", "Doe"))
+
+
+def test_login_success_and_fail_safe_activity_logger() -> None:
+    logger = MagicMock()
+    logger.record.side_effect = RuntimeError("MongoDB down")
+    uc, repo, _, _ = _make_usecase(logger=logger)
+
+    hashed = hash_password("secret123")
+    repo.get_user_by_email.return_value = StoredUserRecord(_sample_user(1), hashed)
+    repo.upsert_oauth.side_effect = lambda uid, acc, ref: UserTokenEntity(acc, ref)
+
+    resp = uc.login(UserLoginRequest("jane@example.com", "secret123"), ip_address="127.0.0.1")
+
+    assert resp.user.id == 1
+    assert resp.token.access
+    assert resp.token.refresh
+    repo.upsert_oauth.assert_called_once()
+    logger.record.assert_called_once()
+
+
+def test_login_wrong_password_logs_failed_attempt_and_raises() -> None:
+    uc, repo, _, logger = _make_usecase()
+    repo.get_user_by_email.return_value = StoredUserRecord(
+        _sample_user(1), hash_password("correct-pass")
+    )
+
+    with pytest.raises(AuthenticationError, match="password is invalid"):
+        uc.login(UserLoginRequest("jane@example.com", "wrong-pass"))
+
+    logger.record.assert_called_once()
+    assert logger.record.call_args.kwargs["action"] == "USER_LOGIN"
+    assert logger.record.call_args.kwargs["status"] == "failed"
+
+
+def test_refresh_token_rotates_access_and_preserves_refresh_exp() -> None:
+    uc, repo, jwt_auth, logger = _make_usecase()
+    user = _sample_user(3)
+    initial_refresh = jwt_auth.create_refresh_token(claims=jwt_auth.parse_token(
+        jwt_auth.create_access_token(claims=type("C", (), {"id": 3})())  # type: ignore[arg-type]
+    ).claims)
+    original_exp = jwt_auth.parse_token(initial_refresh).exp
+
+    repo.find_one_oauth_by_user_id.return_value = UserTokenEntity("old-acc", initial_refresh)
+    repo.get_user_by_user_id.return_value = user
+    repo.upsert_oauth.side_effect = lambda uid, acc, ref: UserTokenEntity(acc, ref)
+
+    resp = uc.refresh_token(UserRefreshTokenRequest(initial_refresh))
+    assert resp.user.id == 3
+    assert jwt_auth.parse_token(resp.token.refresh).exp == original_exp
+    logger.record.assert_called_once()
+    assert logger.record.call_args.kwargs["action"] == "USER_REFRESH_TOKEN"
+
+
+def test_refresh_token_mismatch_raises_authentication_error() -> None:
+    uc, repo, jwt_auth, _ = _make_usecase()
+    from src.domain.entities.user import UserTokenClaimsEntity
+
+    refresh = jwt_auth.create_refresh_token(UserTokenClaimsEntity(id=3))
+    repo.find_one_oauth_by_user_id.return_value = UserTokenEntity("acc", "different-refresh")
+
+    with pytest.raises(AuthenticationError, match="user token not found"):
+        uc.refresh_token(UserRefreshTokenRequest(refresh))
+
+
+def test_logout_deletes_oauth_and_logs_activity() -> None:
+    uc, repo, jwt_auth, logger = _make_usecase()
+    from src.domain.entities.user import UserTokenClaimsEntity
+
+    refresh = jwt_auth.create_refresh_token(UserTokenClaimsEntity(id=5))
+    repo.find_one_oauth_by_user_id.return_value = UserTokenEntity("acc", refresh)
+
+    uc.logout(UserLogoutRequest(refresh))
+    repo.delete_oauth_by_user_id.assert_called_once_with(5)
+    logger.record.assert_called_once()
+    assert logger.record.call_args.kwargs["action"] == "USER_LOGOUT"
+
+
+def test_authenticate_validates_jwt_and_db_session() -> None:
+    uc, repo, jwt_auth, _ = _make_usecase()
+    from src.domain.entities.user import UserTokenClaimsEntity
+
+    access = jwt_auth.create_access_token(UserTokenClaimsEntity(id=2))
+    repo.find_oauth_by_user_id_and_access_token.return_value = UserTokenEntity(access, "ref")
+    repo.get_user_by_user_id.return_value = _sample_user(2)
+    repo.get_user_permission_by_user_id.return_value = UserPermissionEntity(1, 2, "user")
+
+    user, perm = uc.authenticate(f"Bearer {access}")
+    assert user.id == 2
+    assert perm is not None and perm.permission == "user"
+
+
+def test_get_user_profile_not_found_raises() -> None:
+    uc, repo, _, _ = _make_usecase()
+    repo.get_user_by_user_id.return_value = None
+    with pytest.raises(NotFoundError, match="user not found"):
+        uc.get_user_profile(999)

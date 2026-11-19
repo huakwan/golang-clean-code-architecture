@@ -1,0 +1,35 @@
+[project]
+name = "python-django-clean-api"
+version = "0.0.1"
+description = "Python Django + DRF Clean Code Architecture backend with JWT Auth and Polyglot Dynamic CRUD"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "Django>=5.1,<6.0",
+    "djangorestframework>=3.15,<4.0",
+    "drf-spectacular>=0.27,<1.0",
+    "django-cors-headers>=4.4,<5.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "pymongo>=4.8,<5.0",
+    "PyJWT>=2.9,<3.0",
+    "bcrypt>=4.2,<5.0",
+    "python-dotenv>=1.0,<2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9.0",
+    "pytest-django>=4.9,<5.0",
+    "pytest-cov>=5.0,<6.0",
+    "ruff>=0.8,<1.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = ["src/infrastructure/database/postgres/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
