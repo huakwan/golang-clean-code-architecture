@@ -54,7 +54,7 @@ def get_config() -> AppConfig:
         name=os.getenv("APP_NAME", "PYTHON DJANGO CLEAN API"),
         version=os.getenv("APP_VERSION", "0.0.1"),
         debug=_parse_bool(os.getenv("APP_DEBUG"), default=True),
-        postgres_db_name=os.getenv("APP_POSTGRES_DB_NAME", "django_clean_arch"),
+        postgres_db_name=os.getenv("APP_POSTGRES_DB_NAME", "postgres"),
         postgres_db_user=os.getenv("APP_POSTGRES_DB_USER", "postgres"),
         postgres_db_password=os.getenv("APP_POSTGRES_DB_PASSWORD", "golang-first-api"),
         postgres_db_host=os.getenv("APP_POSTGRES_DB_HOST", "localhost"),

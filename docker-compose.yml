@@ -8,8 +8,6 @@ services:
       POSTGRES_PASSWORD: golang-first-api
     ports:
       - "5432:5432"
-    volumes:
-      - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
 
   mongodb:
     image: mongo:6.0.8

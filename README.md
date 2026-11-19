@@ -48,7 +48,6 @@ golang-clean-code-architecture/
 │       ├── interface/        # GoFiber request handlers & GORM/MongoDB repositories
 │       ├── infrastructure/   # GoFiber HTTP server, Swagger docs, Postgres migrations, Mongo connector
 │       └── shared/           # HS256 JWT auth, bcrypt, slug converter, Avro schema generator
-├── docker/postgres/          # PostgreSQL init script (creates django_clean_arch DB)
 └── docker-compose.yml        # PostgreSQL 15 (postgres-15) + MongoDB 6.0.8 (mongo-6)
 ```
 
@@ -62,12 +61,7 @@ Start PostgreSQL 15 (`:5432`) and MongoDB 6.0.8 (`:27017`):
 docker compose up -d
 ```
 
-- On a fresh container, `docker/postgres/init-db.sql` automatically creates the `django_clean_arch` database alongside the default `postgres` database.
-- If `postgres-15` was already initialized earlier, create `django_clean_arch` once:
-
-```bash
-docker exec -it postgres-15 psql -U postgres -c "CREATE DATABASE django_clean_arch;"
-```
+- Uses the default `postgres` database in `postgres-15`.
 
 ---
 
