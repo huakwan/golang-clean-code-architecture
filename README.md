@@ -1,8 +1,37 @@
 ## Golang Clean Code Architecture Template
 
-Go (Golang) Clean Architecture based on Reading Uncle Bob's Clean Architecture. This code using GoFiber, GORM and User registerm authentication feature.
+Go (Golang) Clean Architecture based on Reading Uncle Bob's Clean Architecture. This code uses GoFiber, GORM, JWT authentication, and a Dynamic CRUD / Avro Schema engine, paired with a Vue.js 3 frontend (`frontend/`).
 
-## Installation
+## Frontend (Vue.js 3)
+
+Built with **Vue 3 (`<script setup lang="ts">`) + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind CSS + Vitest**.
+
+Currently connected to the Go API (`http://localhost:3000`):
+- **Authentication**: Register, Login, Logout, Profile (`POST /api/v1/users/profile`), and automatic `401` JWT refresh & retry interceptor
+- **Dashboard**: Real-time Health Check (`GET /api/v1/`) and quick links to modules & Swagger UI
+- **Profile & Auth Session**: User identity view, JWT token inspector, and Refresh Token test trigger
+- **Dynamic Data Explorer (Read-only)**: Schema-driven table, pagination, record detail modal, and Avro Schema viewer for `users`, `user-tokens`, and `user-permissions`
+
+### Setup & Run Frontend
+```bash
+cd frontend
+cp env.template .env
+npm install
+npm run dev
+```
+The app runs at `http://localhost:5173`.
+
+### Frontend Tests & Build
+```bash
+cd frontend
+npm run test:unit
+npm run type-check
+npm run build
+```
+
+---
+
+## Backend (Go Reference API) — Installation
 1. Replace "github.com/max38/golang-clean-code-architecture" with "your module name"
 2. Copy or Change "env.template" file name to ".env" or ".env.dev"
 3. Check on code for loading config in these files
