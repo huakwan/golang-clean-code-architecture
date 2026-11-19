@@ -1,27 +1,133 @@
-## Golang Clean Code Architecture Template
+# Clean Code Architecture — Python (Django + DRF) + Vue.js 3 + Go Reference
 
-Go (Golang) Clean Architecture based on Reading Uncle Bob's Clean Architecture. This code uses GoFiber, GORM, JWT authentication, and a Dynamic CRUD / Avro Schema engine, paired with a Vue.js 3 frontend (`frontend/`).
+Re-implementation of Uncle Bob's Clean Architecture from the original Go template (`max38/golang-clean-code-architecture`) into **Python (Django 5 + Django REST Framework)** with **JWT Authentication**, **Polyglot Dynamic CRUD (PostgreSQL + MongoDB)**, **Avro Schema Reflection**, **Swagger UI**, and a **Vue.js 3** frontend.
 
-## Frontend (Vue.js 3)
+---
+
+## Repository Structure
+
+```text
+golang-clean-code-architecture/
+├── backend/                  # Python + Django + DRF Clean Architecture API (:8000)
+│   ├── pyproject.toml        # uv dependencies, Python >=3.12,<3.14, ruff config
+│   ├── uv.lock
+│   ├── manage.py
+│   ├── pytest.ini
+│   ├── env.template
+│   └── src/
+│       ├── config/           # env_config, settings, test_settings, urls, crud_models registry
+│       ├── domain/           # Pure Python dataclasses, StrEnum, ABCs (zero framework imports)
+│       ├── usecases/         # UserUsecase, CrudUsecase
+│       ├── interfaces/       # DRF APIView handlers + PostgreSQL & MongoDB repositories
+│       ├── infrastructure/   # Django ORM models/migrations, Mongo connector, DI container, JWT auth, middlewares
+│       ├── shared/           # HS256 JWT, bcrypt, slug converter, Avro schema generator, utils
+│       └── tests/            # Unit tests (domain/shared/usecases/interfaces) & integration tests
+├── frontend/                 # Vue 3 + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind (:5173)
+├── golang-reference/         # Original Go (GoFiber + GORM) reference API (:3000)
+├── docker/postgres/          # PostgreSQL init script (creates django_clean_arch DB)
+└── docker-compose.yml        # PostgreSQL 15 (postgres-15) + MongoDB 6.0.8 (mongo-6)
+```
+
+---
+
+## Local Databases (Docker Compose)
+
+Start PostgreSQL 15 (`:5432`) and MongoDB 6.0.8 (`:27017`):
+
+```bash
+docker compose up -d
+```
+
+- On a fresh container, `docker/postgres/init-db.sql` automatically creates the `django_clean_arch` database alongside the default `postgres` database.
+- If `postgres-15` was already initialized earlier, create `django_clean_arch` once:
+
+```bash
+docker exec -it postgres-15 psql -U postgres -c "CREATE DATABASE django_clean_arch;"
+```
+
+---
+
+## Backend (Python — Django + DRF, `:8000`)
+
+### Features
+- **Clean Architecture Layers**: strict inward dependency rules (`domain/` has zero Django/DRF/PyMongo imports, verified by AST unit test).
+- **User Management & JWT Auth (HS256)**:
+  - Register (email regex validation, `bcrypt` hashing, auto-creates default `user_permissions` record)
+  - Login (`access` + `refresh` tokens persisted in `user_tokens` via upsert)
+  - Refresh Token (validates DB session, rotates `access` token, preserves original `refresh` token expiry)
+  - Logout (revokes `user_tokens` session)
+  - Profile (`GET /api/v1/users/profile` via Bearer JWT)
+  - Automatic fail-safe audit logging of auth events (`USER_REGISTER`, `USER_LOGIN`, `USER_REFRESH_TOKEN`, `USER_LOGOUT`) into MongoDB `activity_logs`
+- **Polyglot Dynamic CRUD Engine (`/api/v1/data/<slug>/...`)**:
+  - Model registry (`src/config/crud_models.py`) routing slugs to **PostgreSQL** (`users`, `user-tokens`, `user-permissions`) or **MongoDB** (`activity-logs`)
+  - Model discovery (`GET /api/v1/data/models/`) returning `slug`, `label`, `datasource`, and `allowed_operations`
+  - Automatic Avro Schema generation (`GET /api/v1/data/<slug>/describe`), hiding sensitive fields (`password`)
+  - Operation-level enforcement via `allowed_operations()` (`activity-logs` allows `read` and `delete` only; `POST`/`PUT` return `405 Method Not Allowed`)
+  - Accurate pagination (`_page`, `_pageSize`, max `1000`) using `count()` before slicing
+- **Interactive API Docs**: OpenAPI 3.0 + Swagger UI at `http://localhost:8000/swagger/`
+
+### Setup & Run (with `uv`)
+
+```bash
+cd backend
+cp env.template .env
+uv sync
+uv run python manage.py migrate
+uv run python manage.py runserver 8000
+```
+
+- API Base URL: `http://localhost:8000/api/v1/`
+- Swagger UI: `http://localhost:8000/swagger/`
+
+### Tests & Quality Checks
+
+```bash
+cd backend
+uv run ruff check src
+uv run python -m compileall -q src
+uv run pytest src/tests -v --cov=src/domain --cov=src/shared --cov=src/usecases --cov-report=term-missing
+```
+
+### API Endpoints
+
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :---: | :--- |
+| `GET` | `/api/v1/` | Public | Health check (`name`, `version`) |
+| `POST` | `/api/v1/users/register` | Public | Register new user |
+| `POST` | `/api/v1/users/login` | Public | Login and issue JWT `access` + `refresh` tokens |
+| `POST` | `/api/v1/users/refresh-token` | Public | Rotate `access` token using `refresh_token` |
+| `POST` | `/api/v1/users/logout` | Public | Revoke session tokens |
+| `GET` | `/api/v1/users/profile` | Bearer JWT | Get current authenticated user |
+| `GET` | `/api/v1/data/models/` | Bearer JWT | List registered models, datasources & `allowed_operations` |
+| `GET` | `/api/v1/data/<slug>/describe` | Bearer JWT | Get Avro schema for entity |
+| `GET` | `/api/v1/data/<slug>/` | Bearer JWT | Paginated list (`_page`, `_pageSize`) with `data_schema` |
+| `POST` | `/api/v1/data/<slug>/` | Bearer JWT | Create record (`405` if disallowed) |
+| `GET` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Retrieve record by ID |
+| `PUT` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Update record by ID (`405` if disallowed) |
+| `DELETE` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Delete record by ID |
+| `GET` | `/swagger/` | Public | Interactive Swagger UI |
+
+---
+
+## Frontend (Vue.js 3, `:5173`)
 
 Built with **Vue 3 (`<script setup lang="ts">`) + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind CSS + Vitest**.
 
-Currently connected to the Go API (`http://localhost:3000`):
-- **Authentication**: Register, Login, Logout, Profile (`POST /api/v1/users/profile`), and automatic `401` JWT refresh & retry interceptor
-- **Dashboard**: Real-time Health Check (`GET /api/v1/`) and quick links to modules & Swagger UI
-- **Profile & Auth Session**: User identity view, JWT token inspector, and Refresh Token test trigger
-- **Dynamic Data Explorer (Read-only)**: Schema-driven table, pagination, record detail modal, and Avro Schema viewer for `users`, `user-tokens`, and `user-permissions`
+> **Current Step Status**: Step 1 frontend is connected to the Go reference API (`http://localhost:3000`) in read-only CRUD mode. Step 3 will switch it to the Python backend (`http://localhost:8000`) and enable full Dynamic CRUD (`Create`/`Update`/`Delete`) + dynamic model discovery.
 
 ### Setup & Run Frontend
+
 ```bash
 cd frontend
 cp env.template .env
 npm install
 npm run dev
 ```
+
 The app runs at `http://localhost:5173`.
 
 ### Frontend Tests & Build
+
 ```bash
 cd frontend
 npm run test:unit
@@ -31,121 +137,16 @@ npm run build
 
 ---
 
-## Backend (Go Reference API) — Installation
-1. Replace "github.com/max38/golang-clean-code-architecture" with "your module name"
-2. Copy or Change "env.template" file name to ".env" or ".env.dev"
-3. Check on code for loading config in these files
-```
-src/infrastructure/database/postgres/migration/main.go
-src/infrastructure/gofiber/main.go
-```
+## Go Reference API (`golang-reference/`, `:3000`)
 
-4. Run Postgresql
-5. Migrate RDBMS
-6. Start web project
+The original Go (GoFiber + GORM) project is preserved in `golang-reference/` and remains runnable on `:3000`:
 
-
-### run postgresql on docker
 ```bash
-docker run -p 5432:5432 --name postgres-golang-first-api -e POSTGRES_PASSWORD=golang-first-api -d postgres:15
-```
-or docker compose
-```bash
-docker-compose up
-```
-
-### Migrate RDBMS
-```bash
+cd golang-reference
+cp env.template .env.dev
 go run src/infrastructure/database/postgres/migration/main.go
-```
-
-### start web project (Production)
-
-```bash
 go run src/infrastructure/gofiber/main.go
 ```
 
-
-# Template for every projdct
-## Project Structure
-```
-src
- |-config
- |-domain
-    |-entities
-    |-models
-    |-repositories
- |-infrastructure
-    |-aws_lambda
-    |-database
-    |-gofiber
- |-interface
-    |-handlers
-       |-gofiber
-    |-repositories
-       |-postgres
- |-shared
- |-usecases
-```
-
-## Install lib
-
-### REST API Lib
-```bash
-go get github.com/gofiber/fiber/v2
-```
-
-### Generate Swagger Document
-1. Install follow this https://github.com/gofiber/swagger
-2. Go to ChatGPT and prompt with
-```
-Please generate Declarative Comments Format for Swagger Doc follow this gofiber code.
-"""<Handler Code>"""
-```
-
-3. update Declarative Comments from ChatGPT to Handler
-
-4. Generate swagger.json
-```bash
-swag init -g src/infrastructure/gofiber/main.go -o src/infrastructure/gofiber/docs/
-```
-
-5. Go to localhost:3000/swagger/
-
-
-### Configuration Lib
-```bash
-go get github.com/knadh/koanf/v2
-go get github.com/knadh/koanf/providers/file
-go get github.com/knadh/koanf/providers/env
-go get github.com/knadh/koanf/parsers/dotenv
-```
-
-### GORM
-```bash
-go get -u gorm.io/gorm
-go get -u gorm.io/driver/postgresql
-```
-
-### MongoDB
-if use mongodb
-```bash
-go get go.mongodb.org/mongo-driver
-go get go.mongodb.org/mongo-driver/mongo
-```
-
-
-## For Development
-
-### Install Gofiber cli
-follow this https://github.com/gofiber/cli
-
-### start web project (Development)
-
-```bash
-fiber dev -t ./src/infrastructure/gofiber/main.go
-```
-
-### Add More Model
-1. Define in src/domain/models/xxxx.go
-2. Add Model at src/config/crudModels.go
+- API Base URL: `http://localhost:3000/api/v1/`
+- Swagger UI: `http://localhost:3000/swagger/`
