@@ -9,6 +9,7 @@ Re-implementation of Uncle Bob's Clean Architecture from the original Go templat
 ```text
 golang-clean-code-architecture/
 ├── backend/                  # Python + Django + DRF Clean Architecture API (:8000)
+│   ├── Makefile              # Automation targets (run, migrate, test, lint, check)
 │   ├── pyproject.toml        # uv dependencies, Python >=3.12,<3.14, ruff config
 │   ├── uv.lock
 │   ├── manage.py
@@ -23,7 +24,30 @@ golang-clean-code-architecture/
 │       ├── shared/           # HS256 JWT, bcrypt, slug converter, Avro schema generator, utils
 │       └── tests/            # Unit tests (domain/shared/usecases/interfaces) & integration tests
 ├── frontend/                 # Vue 3 + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind (:5173)
+│   ├── Makefile              # Automation targets (dev, build, type-check, test, check)
+│   ├── package.json          # Node dependencies and scripts
+│   ├── vite.config.ts        # Vite configuration + Tailwind v4 + Vue plugin
+│   ├── vitest.config.ts      # Vitest test configuration (jsdom environment)
+│   ├── tsconfig.json         # TypeScript compiler configuration
+│   ├── env.template          # Environment variables template (VITE_API_BASE_URL)
+│   └── src/
+│       ├── api/              # Axios client (http.ts), Bearer & 401 refresh interceptors, auth, crud, monitor
+│       ├── stores/           # Pinia stores (auth.store, crud.store, toast.store)
+│       ├── router/           # Vue Router definitions and auth navigation guards
+│       ├── types/            # TypeScript interfaces (auth.types, crud.types, api.types)
+│       ├── components/       # Layout, common pagination/toast, AvroSchemaViewer, DynamicDataTable, DynamicFormModal
+│       ├── views/            # DashboardView, DataExplorerView, LoginView, RegisterView, ProfileView
+│       └── __tests__/        # Vitest unit tests for api, stores, components, and views
 ├── golang-reference/         # Original Go (GoFiber + GORM) reference API (:3000)
+│   ├── go.mod / go.sum       # Go module dependencies
+│   ├── env.template          # Go environment template
+│   └── src/
+│       ├── config/           # Koanf configuration loader & registered CRUD models
+│       ├── domain/           # Domain entities, DTOs, and repository interfaces
+│       ├── usecases/         # User and generic CRUD usecases
+│       ├── interface/        # GoFiber request handlers & GORM/MongoDB repositories
+│       ├── infrastructure/   # GoFiber HTTP server, Swagger docs, Postgres migrations, Mongo connector
+│       └── shared/           # HS256 JWT auth, bcrypt, slug converter, Avro schema generator
 ├── docker/postgres/          # PostgreSQL init script (creates django_clean_arch DB)
 └── docker-compose.yml        # PostgreSQL 15 (postgres-15) + MongoDB 6.0.8 (mongo-6)
 ```
