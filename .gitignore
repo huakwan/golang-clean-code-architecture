@@ -33,11 +33,23 @@ vendor
 
 # Customs
 *.env*
+!env.template
+!**/env.template
 .air*
 /tmp
 *.pem
 apikey.txt
 *.txt
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
 
 # Local files
 docs/
