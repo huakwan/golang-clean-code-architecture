@@ -1,18 +1,34 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useCrudStore } from '@/stores/crud.store'
 import AvroSchemaViewer from '@/components/crud/AvroSchemaViewer.vue'
 import DynamicDataTable from '@/components/crud/DynamicDataTable.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import { extractApiError, type ApiErrorResponse } from '@/types/api.types'
 
+const route = useRoute()
 const crudStore = useCrudStore()
 const activeTab = ref<'records' | 'schema'>('records')
 const apiError = ref<ApiErrorResponse | null>(null)
 const detailOpen = ref(false)
 
+const activeSlug = computed(() => {
+  const param = route.params.slug
+  if (typeof param === 'string' && param.length > 0) {
+    return param
+  }
+  return crudStore.models[0]?.slug ?? crudStore.selectedSlug
+})
+
+const activeModel = computed(() =>
+  crudStore.models.find((model) => model.slug === activeSlug.value),
+)
+
 async function loadModel(slug: string): Promise<void> {
   apiError.value = null
+  detailOpen.value = false
+  crudStore.clearDetail()
   try {
     await crudStore.selectModel(slug)
   } catch (err) {
@@ -23,7 +39,7 @@ async function loadModel(slug: string): Promise<void> {
 async function handlePageChange(nextPage: number): Promise<void> {
   apiError.value = null
   try {
-    await crudStore.fetchList(crudStore.selectedSlug, nextPage, crudStore.pageSize)
+    await crudStore.fetchList(activeSlug.value, nextPage, crudStore.pageSize)
   } catch (err) {
     apiError.value = extractApiError(err)
   }
@@ -32,7 +48,7 @@ async function handlePageChange(nextPage: number): Promise<void> {
 async function handlePageSizeChange(nextSize: number): Promise<void> {
   apiError.value = null
   try {
-    await crudStore.fetchList(crudStore.selectedSlug, 1, nextSize)
+    await crudStore.fetchList(activeSlug.value, 1, nextSize)
   } catch (err) {
     apiError.value = extractApiError(err)
   }
@@ -54,60 +70,47 @@ function closeDetail(): void {
   crudStore.clearDetail()
 }
 
-onMounted(() => {
-  void loadModel(crudStore.selectedSlug)
-})
+watch(
+  activeSlug,
+  (slug) => {
+    if (slug) {
+      void loadModel(slug)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <div class="flex items-center gap-2.5">
-          <h1 class="text-2xl font-bold text-slate-900">Dynamic Data Explorer</h1>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <h1 class="text-2xl font-bold text-slate-900">
+            {{ activeModel?.label || activeSlug }}
+          </h1>
+          <span
+            v-if="activeModel"
+            class="rounded-full bg-indigo-100 px-2.5 py-0.5 font-mono text-xs font-medium uppercase text-indigo-700"
+          >
+            {{ activeModel.datasource }}
+          </span>
           <span class="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-700">
             Read-only · Go API
           </span>
         </div>
         <p class="mt-1 text-sm text-slate-500">
-          Schema-driven table and record inspector powered by Avro schema reflection.
+          Schema-driven table and record inspector powered by Avro schema reflection
+          <span class="font-mono text-xs text-slate-400">(/api/v1/data/{{ activeSlug }})</span>.
         </p>
       </div>
 
       <button
         type="button"
         class="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        @click="loadModel(crudStore.selectedSlug)"
+        @click="loadModel(activeSlug)"
       >
         Reload
-      </button>
-    </div>
-
-    <!-- Model selector -->
-    <div class="flex flex-wrap items-center gap-2">
-      <button
-        v-for="model in crudStore.models"
-        :key="model.slug"
-        type="button"
-        :class="[
-          'flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition',
-          crudStore.selectedSlug === model.slug
-            ? 'border-indigo-600 bg-indigo-600 text-white'
-            : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300',
-        ]"
-        @click="loadModel(model.slug)"
-      >
-        <span>{{ model.label }}</span>
-        <span
-          :class="[
-            'rounded px-1.5 py-0.5 font-mono text-[10px] uppercase',
-            crudStore.selectedSlug === model.slug
-              ? 'bg-indigo-500 text-white'
-              : 'bg-slate-100 text-slate-600',
-          ]"
-        >
-          {{ model.datasource }}
-        </span>
       </button>
     </div>
 

@@ -34,7 +34,7 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Profile & Auth' },
     },
     {
-      path: '/data-explorer',
+      path: '/data-explorer/:slug?',
       name: 'data-explorer',
       component: DataExplorerView,
       meta: { requiresAuth: true, title: 'Data Explorer' },
