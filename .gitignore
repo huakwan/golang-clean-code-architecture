@@ -35,6 +35,8 @@ vendor
 *.env*
 !env.template
 !**/env.template
+!Makefile
+!**/Makefile
 .air*
 /tmp
 *.pem
