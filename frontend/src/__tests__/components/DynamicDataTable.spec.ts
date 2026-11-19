@@ -52,4 +52,42 @@ describe('DynamicDataTable', () => {
 
     expect(wrapper.emitted('inspect')).toEqual([[1]])
   })
+
+  it('shows Edit and Delete buttons based on canUpdate and canDelete props and emits events', async () => {
+    const wrapper = mount(DynamicDataTable, {
+      props: {
+        schema: sampleSchema,
+        items: sampleItems,
+        loading: false,
+        canUpdate: true,
+        canDelete: true,
+      },
+    })
+
+    const editButtons = wrapper.findAll('button[data-testid="edit-row"]')
+    const deleteButtons = wrapper.findAll('button[data-testid="delete-row"]')
+    expect(editButtons).toHaveLength(2)
+    expect(deleteButtons).toHaveLength(2)
+
+    await editButtons[0].trigger('click')
+    await deleteButtons[1].trigger('click')
+
+    expect(wrapper.emitted('edit')).toEqual([[sampleItems[0]]])
+    expect(wrapper.emitted('delete')).toEqual([[2]])
+  })
+
+  it('hides Edit button when canUpdate is false while keeping Delete when canDelete is true', () => {
+    const wrapper = mount(DynamicDataTable, {
+      props: {
+        schema: sampleSchema,
+        items: sampleItems,
+        loading: false,
+        canUpdate: false,
+        canDelete: true,
+      },
+    })
+
+    expect(wrapper.findAll('button[data-testid="edit-row"]')).toHaveLength(0)
+    expect(wrapper.findAll('button[data-testid="delete-row"]')).toHaveLength(2)
+  })
 })

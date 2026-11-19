@@ -3,6 +3,35 @@ import { mount } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import { useCrudStore } from '@/stores/crud.store'
+import type { EntityModelOption } from '@/types/crud.types'
+
+const SAMPLE_MODELS: EntityModelOption[] = [
+  {
+    slug: 'users',
+    label: 'Users',
+    datasource: 'postgresql',
+    allowed_operations: ['read', 'create', 'update', 'delete'],
+  },
+  {
+    slug: 'user-tokens',
+    label: 'User Tokens',
+    datasource: 'postgresql',
+    allowed_operations: ['read', 'create', 'update', 'delete'],
+  },
+  {
+    slug: 'user-permissions',
+    label: 'User Permissions',
+    datasource: 'postgresql',
+    allowed_operations: ['read', 'create', 'update', 'delete'],
+  },
+  {
+    slug: 'activity-logs',
+    label: 'Activity Logs',
+    datasource: 'mongodb',
+    allowed_operations: ['read', 'delete'],
+  },
+]
 
 function makeRouter() {
   return createRouter({
@@ -27,9 +56,16 @@ describe('AppLayout', () => {
     await router.push('/data-explorer')
     await router.isReady()
 
+    const pinia = createTestingPinia({
+      createSpy: vi.fn,
+      initialState: {
+        crud: { models: SAMPLE_MODELS, modelsLoaded: true },
+      },
+    })
+
     const wrapper = mount(AppLayout, {
       global: {
-        plugins: [createTestingPinia({ createSpy: vi.fn }), router],
+        plugins: [pinia, router],
       },
       slots: {
         default: '<div class="w-[2000px]">Wide table content</div>',
@@ -48,23 +84,35 @@ describe('AppLayout', () => {
     expect(mainColumn?.classList.contains('min-w-0')).toBe(true)
   })
 
-  it('renders Data Explorer models as sidebar submenu links and highlights the active slug', async () => {
+  it('fetches models on mount when not yet loaded and renders dynamic submenu links', async () => {
     const router = makeRouter()
     await router.push('/data-explorer/user-tokens')
     await router.isReady()
 
+    const pinia = createTestingPinia({
+      createSpy: vi.fn,
+      initialState: {
+        crud: { models: SAMPLE_MODELS, modelsLoaded: false },
+      },
+    })
+    const crudStore = useCrudStore(pinia)
+    vi.mocked(crudStore.fetchModels).mockResolvedValue(SAMPLE_MODELS)
+
     const wrapper = mount(AppLayout, {
       global: {
-        plugins: [createTestingPinia({ createSpy: vi.fn }), router],
+        plugins: [pinia, router],
       },
     })
 
+    expect(crudStore.fetchModels).toHaveBeenCalledTimes(1)
+
     const submenuLinks = wrapper.findAll('[data-testid="data-explorer-submenu-item"]')
-    expect(submenuLinks).toHaveLength(3)
+    expect(submenuLinks).toHaveLength(4)
     expect(submenuLinks.map((link) => link.attributes('href'))).toEqual([
       '/data-explorer/users',
       '/data-explorer/user-tokens',
       '/data-explorer/user-permissions',
+      '/data-explorer/activity-logs',
     ])
 
     const activeLink = submenuLinks.find((link) => link.attributes('href') === '/data-explorer/user-tokens')
@@ -79,20 +127,27 @@ describe('AppLayout', () => {
     await router.push('/')
     await router.isReady()
 
+    const pinia = createTestingPinia({
+      createSpy: vi.fn,
+      initialState: {
+        crud: { models: SAMPLE_MODELS, modelsLoaded: true },
+      },
+    })
+
     const wrapper = mount(AppLayout, {
       global: {
-        plugins: [createTestingPinia({ createSpy: vi.fn }), router],
+        plugins: [pinia, router],
       },
     })
 
     const toggleBtn = wrapper.find('[data-testid="data-explorer-toggle"]')
     expect(toggleBtn.exists()).toBe(true)
-    expect(wrapper.findAll('[data-testid="data-explorer-submenu-item"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="data-explorer-submenu-item"]')).toHaveLength(4)
 
     await toggleBtn.trigger('click')
     expect(wrapper.findAll('[data-testid="data-explorer-submenu-item"]')).toHaveLength(0)
 
     await toggleBtn.trigger('click')
-    expect(wrapper.findAll('[data-testid="data-explorer-submenu-item"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="data-explorer-submenu-item"]')).toHaveLength(4)
   })
 })

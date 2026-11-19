@@ -80,4 +80,57 @@ describe('AuthViews (LoginView & RegisterView)', () => {
     expect(wrapper.text()).toContain('Please enter a valid email address')
     expect(authStore.register).not.toHaveBeenCalled()
   })
+
+  it('shows validation error when confirm password does not match password on RegisterView', async () => {
+    const router = makeRouter()
+    const pinia = createTestingPinia({ createSpy: vi.fn })
+    const authStore = useAuthStore(pinia)
+
+    const wrapper = mount(RegisterView, {
+      global: { plugins: [pinia, router] },
+    })
+
+    await wrapper.find('input[name="first_name"]').setValue('Jane')
+    await wrapper.find('input[name="last_name"]').setValue('Doe')
+    await wrapper.find('input[name="email"]').setValue('jane@example.com')
+    await wrapper.find('input[name="password"]').setValue('secret123')
+    await wrapper.find('input[name="confirm_password"]').setValue('different123')
+    await wrapper.find('form').trigger('submit.prevent')
+
+    expect(wrapper.text()).toContain('Passwords do not match.')
+    expect(authStore.register).not.toHaveBeenCalled()
+  })
+
+  it('submits registration when confirm password matches password', async () => {
+    const router = makeRouter()
+    const pinia = createTestingPinia({ createSpy: vi.fn })
+    const authStore = useAuthStore(pinia)
+    vi.mocked(authStore.register).mockResolvedValueOnce({
+      id: 1,
+      email: 'jane@example.com',
+      first_name: 'Jane',
+      last_name: 'Doe',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+
+    const wrapper = mount(RegisterView, {
+      global: { plugins: [pinia, router] },
+    })
+
+    await wrapper.find('input[name="first_name"]').setValue('Jane')
+    await wrapper.find('input[name="last_name"]').setValue('Doe')
+    await wrapper.find('input[name="email"]').setValue('jane@example.com')
+    await wrapper.find('input[name="password"]').setValue('secret123')
+    await wrapper.find('input[name="confirm_password"]').setValue('secret123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(authStore.register).toHaveBeenCalledWith({
+      first_name: 'Jane',
+      last_name: 'Doe',
+      email: 'jane@example.com',
+      password: 'secret123',
+    })
+  })
 })

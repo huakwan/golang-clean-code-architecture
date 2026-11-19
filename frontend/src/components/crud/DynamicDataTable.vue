@@ -6,14 +6,19 @@ const props = defineProps<{
   schema: AvroSchema | null
   items: Record<string, unknown>[]
   loading?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'inspect', id: string | number): void
+  (e: 'edit', row: Record<string, unknown>): void
+  (e: 'delete', id: string | number): void
 }>()
 
 const columns = computed<string[]>(() => {
   const fromSchema = (props.schema?.fields ?? [])
+    .filter((field) => !field.fields)
     .map((field) => field.name)
     .filter((name): name is string => Boolean(name && name !== 'password'))
 
@@ -83,15 +88,34 @@ function formatCell(value: unknown): string {
             {{ formatCell(row[col]) }}
           </td>
           <td class="whitespace-nowrap px-4 py-3 text-right">
-            <button
-              v-if="extractRowId(row) !== null"
-              type="button"
-              data-testid="inspect-row"
-              class="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
-              @click="emit('inspect', extractRowId(row)!)"
-            >
-              View
-            </button>
+            <div v-if="extractRowId(row) !== null" class="inline-flex items-center gap-1.5">
+              <button
+                type="button"
+                data-testid="inspect-row"
+                class="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                @click="emit('inspect', extractRowId(row)!)"
+              >
+                View
+              </button>
+              <button
+                v-if="canUpdate"
+                type="button"
+                data-testid="edit-row"
+                class="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                @click="emit('edit', row)"
+              >
+                Edit
+              </button>
+              <button
+                v-if="canDelete"
+                type="button"
+                data-testid="delete-row"
+                class="rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                @click="emit('delete', extractRowId(row)!)"
+              >
+                Delete
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>

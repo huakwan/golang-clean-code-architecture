@@ -111,9 +111,15 @@ uv run pytest src/tests -v --cov=src/domain --cov=src/shared --cov=src/usecases 
 
 ## Frontend (Vue.js 3, `:5173`)
 
-Built with **Vue 3 (`<script setup lang="ts">`) + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind CSS + Vitest**.
+Built with **Vue 3 (`<script setup lang="ts">`) + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind CSS + Vitest**, connected to the Python Django + DRF backend (`http://localhost:8000`).
 
-> **Current Step Status**: Step 1 frontend is connected to the Go reference API (`http://localhost:3000`) in read-only CRUD mode. Step 3 will switch it to the Python backend (`http://localhost:8000`) and enable full Dynamic CRUD (`Create`/`Update`/`Delete`) + dynamic model discovery.
+### Features
+- **Auth & Session Lifecycle**: Register, Login, `GET /api/v1/users/profile`, JWT Token Inspector, manual Refresh Token test, Logout, and automatic 401 refresh-and-retry via Axios interceptor.
+- **Dashboard**: Real-time backend health check (`GET /api/v1/`) and direct links to Data Explorer, Profile, and Swagger UI (`/swagger/`).
+- **Dynamic Data Explorer (PostgreSQL & MongoDB)**:
+  - Discovers registered models dynamically from `GET /api/v1/data/models/` with datasource badges (`postgresql` / `mongodb`).
+  - Avro Schema viewer (`AvroSchemaViewer.vue`) and schema-driven table (`DynamicDataTable.vue`) with pagination and record detail modal.
+  - Schema-driven Create/Edit form modal (`DynamicFormModal.vue`) and Delete confirmation dialog, automatically gated by each model's `allowed_operations` (e.g., `activity-logs` shows View & Delete only).
 
 ### Setup & Run Frontend
 

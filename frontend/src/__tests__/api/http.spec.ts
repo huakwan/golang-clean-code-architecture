@@ -36,7 +36,7 @@ describe('http client & 401 refresh interceptor', () => {
       }
     }
 
-    const client = createHttpClient('http://localhost:3000', adapter)
+    const client = createHttpClient('http://localhost:8000', adapter)
     configureHttpAuth(client, {
       getAccessToken: () => 'my-access-token',
       getRefreshToken: () => 'my-refresh-token',
@@ -86,7 +86,7 @@ describe('http client & 401 refresh interceptor', () => {
       }
     }
 
-    const client = createHttpClient('http://localhost:3000', adapter)
+    const client = createHttpClient('http://localhost:8000', adapter)
     configureHttpAuth(client, {
       getAccessToken: () => currentAccess,
       getRefreshToken: () => 'valid-refresh-token',
@@ -97,7 +97,7 @@ describe('http client & 401 refresh interceptor', () => {
     const res = await client.post('/api/v1/users/profile')
 
     expect(postSpy).toHaveBeenCalledWith(
-      'http://localhost:3000/api/v1/users/refresh-token',
+      'http://localhost:8000/api/v1/users/refresh-token',
       { refresh_token: 'valid-refresh-token' },
       { headers: { 'Content-Type': 'application/json' } },
     )
@@ -123,7 +123,7 @@ describe('http client & 401 refresh interceptor', () => {
       })
     }
 
-    const client = createHttpClient('http://localhost:3000', adapter)
+    const client = createHttpClient('http://localhost:8000', adapter)
     configureHttpAuth(client, {
       getAccessToken: () => 'expired-token',
       getRefreshToken: () => 'revoked-refresh-token',

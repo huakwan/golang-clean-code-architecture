@@ -4,8 +4,8 @@ import { RouterLink } from 'vue-router'
 import { getHealthCheck } from '@/api/monitor.api'
 import { extractApiError, type ApiErrorResponse, type MonitorHealthResponse } from '@/types/api.types'
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '')
-const swaggerUrl = `${apiBaseUrl}/swagger/index.html`
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '')
+const swaggerUrl = `${apiBaseUrl}/swagger/`
 
 const health = ref<MonitorHealthResponse | null>(null)
 const loading = ref(false)
@@ -77,7 +77,7 @@ onMounted(() => {
       <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Version</p>
         <p class="mt-2 font-mono text-lg font-bold text-indigo-600">{{ health?.version || '—' }}</p>
-        <p class="mt-2 text-xs text-slate-500">Step 1 · Go Reference Target</p>
+        <p class="mt-2 text-xs text-slate-500">Python Django + DRF Clean API</p>
       </div>
     </div>
 
@@ -90,7 +90,7 @@ onMounted(() => {
           Dynamic Data Explorer →
         </h3>
         <p class="mt-1 text-sm text-slate-500">
-          Inspect Avro schemas and browse registered PostgreSQL models with pagination.
+          Inspect Avro schemas and manage PostgreSQL &amp; MongoDB models with dynamic CRUD.
         </p>
       </RouterLink>
 

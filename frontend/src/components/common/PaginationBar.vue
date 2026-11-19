@@ -38,7 +38,7 @@ function onPageSizeChange(event: Event): void {
         <span class="relative inline-flex items-center">
           <select
             :value="pageSize"
-            class="appearance-none rounded-md border border-slate-300 bg-white py-1 pl-2.5 pr-8 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none"
+            class="appearance-none rounded-md border border-slate-300 bg-white py-1 pl-2.5 pr-8 text-xs text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
             @change="onPageSizeChange"
           >
             <option v-for="opt in pageSizeOptions" :key="opt" :value="opt">{{ opt }}</option>

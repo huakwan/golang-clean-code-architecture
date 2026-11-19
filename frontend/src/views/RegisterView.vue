@@ -15,6 +15,7 @@ const firstName = ref('')
 const lastName = ref('')
 const email = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const validationError = ref<string | null>(null)
 const apiError = ref<ApiErrorResponse | null>(null)
 
@@ -32,6 +33,10 @@ async function handleSubmit(): Promise<void> {
   }
   if (password.value.length < 6) {
     validationError.value = 'Password must be at least 6 characters.'
+    return
+  }
+  if (password.value !== confirmPassword.value) {
+    validationError.value = 'Passwords do not match.'
     return
   }
 
@@ -117,7 +122,23 @@ async function handleSubmit(): Promise<void> {
             v-model="password"
             name="password"
             type="password"
+            autocomplete="new-password"
             placeholder="Minimum 6 characters"
+            class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700" for="reg-confirm-password">
+            Confirm password
+          </label>
+          <input
+            id="reg-confirm-password"
+            v-model="confirmPassword"
+            name="confirm_password"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Re-enter your password"
             class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           />
         </div>

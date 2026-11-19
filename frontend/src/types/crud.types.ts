@@ -30,18 +30,11 @@ export interface DataListResponse<T = Record<string, unknown>> {
 
 export type DatasourceType = 'postgresql' | 'mongodb'
 
+export type CrudOperation = 'read' | 'create' | 'update' | 'delete'
+
 export interface EntityModelOption {
   slug: string
   label: string
   datasource: DatasourceType
+  allowed_operations: CrudOperation[]
 }
-
-/**
- * Models registered in the Go reference API (src/config/crudModels.go).
- * In Step 3, this list will be fetched dynamically from Python's GET /api/v1/data/models/.
- */
-export const GO_REGISTERED_MODELS: readonly EntityModelOption[] = [
-  { slug: 'users', label: 'Users', datasource: 'postgresql' },
-  { slug: 'user-tokens', label: 'User Tokens', datasource: 'postgresql' },
-  { slug: 'user-permissions', label: 'User Permissions', datasource: 'postgresql' },
-] as const

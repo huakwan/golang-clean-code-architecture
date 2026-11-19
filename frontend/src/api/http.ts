@@ -23,7 +23,7 @@ const SKIP_REFRESH_PATHS = [
 ]
 
 export function createHttpClient(
-  baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   adapter?: AxiosAdapter,
 ): AxiosInstance {
   return axios.create({

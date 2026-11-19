@@ -26,11 +26,7 @@ export async function logout(payload: UserRefreshTokenRequest): Promise<void> {
   await httpClient.post('/api/v1/users/logout', payload)
 }
 
-/**
- * Step 1: Go reference API registers POST /api/v1/users/profile.
- * In Step 3 this will be updated to GET /api/v1/users/profile for the Python backend.
- */
 export async function getProfile(): Promise<UserEntity> {
-  const { data } = await httpClient.post<UserEntity>('/api/v1/users/profile')
+  const { data } = await httpClient.get<UserEntity>('/api/v1/users/profile')
   return data
 }

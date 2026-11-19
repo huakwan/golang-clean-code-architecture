@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import { useCrudStore } from '@/stores/crud.store'
@@ -11,7 +11,7 @@ const authStore = useAuthStore()
 const crudStore = useCrudStore()
 const toastStore = useToastStore()
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const appTitle = import.meta.env.VITE_APP_TITLE || 'Clean Architecture Console'
 
 const dataExplorerOpen = ref(true)
@@ -29,6 +29,12 @@ const activeExplorerSlug = computed(() => {
 watch(isDataExplorerRoute, (isActive) => {
   if (isActive) {
     dataExplorerOpen.value = true
+  }
+})
+
+onMounted(() => {
+  if (!crudStore.modelsLoaded) {
+    void crudStore.fetchModels().catch(() => {})
   }
 })
 
@@ -114,7 +120,9 @@ async function handleLogout(): Promise<void> {
                   'shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] uppercase',
                   isDataExplorerRoute && activeExplorerSlug === model.slug
                     ? 'bg-indigo-500 text-white'
-                    : 'bg-slate-800 text-slate-400',
+                    : model.datasource === 'mongodb'
+                      ? 'bg-emerald-900/60 text-emerald-300'
+                      : 'bg-slate-800 text-slate-400',
                 ]"
               >
                 {{ model.datasource }}
