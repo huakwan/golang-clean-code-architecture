@@ -5,7 +5,7 @@ from functools import lru_cache
 from src.config.env_config import AppConfig, get_config
 from src.infrastructure.database.mongodb.connector import MongoDBConnector
 from src.interfaces.repositories.crud.factory import get_crud_repository
-from src.interfaces.repositories.mongodb.crud_repository import MongoActivityLogger
+from src.interfaces.repositories.mongodb.activity_logger import MongoActivityLogger
 from src.interfaces.repositories.postgres.user_repository import PostgresUserRepository
 from src.shared.authentication.jwt_authentication import JWTAuthenticator
 from src.usecases.crud.crud_usecase import CrudUsecase

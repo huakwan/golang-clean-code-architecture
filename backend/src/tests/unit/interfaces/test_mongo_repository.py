@@ -4,10 +4,8 @@ import pytest
 
 from src.domain.exceptions import NotFoundError
 from src.infrastructure.database.mongodb.models import ActivityLogDocument
-from src.interfaces.repositories.mongodb.crud_repository import (
-    MongoActivityLogger,
-    MongoCRUDRepository,
-)
+from src.interfaces.repositories.mongodb.activity_logger import MongoActivityLogger
+from src.interfaces.repositories.mongodb.crud_repository import MongoCRUDRepository
 from src.tests.conftest import InMemoryMongoCollection
 
 

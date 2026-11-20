@@ -1,26 +1,22 @@
 from __future__ import annotations
 
-import logging
 import math
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from pymongo.errors import PyMongoError
 
 from src.domain.entities.crud import DataListResponse, DataResponse, ICRUDDataModel
 from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.repositories.activity_logger import IActivityLogger
 from src.domain.repositories.crud_repository import ICRUDRepository
+from src.interfaces.repositories.mongodb.collection import (
+    CollectionProvider,
+    make_collection_resolver,
+)
 from src.shared.crud.avro_schema import generate_avro_schema
 from src.shared.crud.constants import SENSITIVE_FIELD_NAMES
 from src.shared.utils import format_iso_datetime
-
-logger = logging.getLogger(__name__)
-
-CollectionProvider = Callable[[str], Any]
 
 
 def _serialize_mongo_value(value: Any) -> Any:
@@ -54,18 +50,6 @@ def _build_id_filter(record_id: str) -> dict[str, Any]:
         return {"_id": record_id}
 
 
-def _make_collection_resolver(
-    collection: Any | None,
-    collection_provider: CollectionProvider | None,
-    collection_name: str,
-) -> Callable[[], Any]:
-    if collection is not None:
-        return lambda: collection
-    if collection_provider is not None:
-        return lambda: collection_provider(collection_name)
-    raise ValueError("Provide either 'collection' or 'collection_provider'")
-
-
 class MongoCRUDRepository(ICRUDRepository):
     """Generic PyMongo repository for any registered MongoDB dataclass document."""
 
@@ -77,7 +61,7 @@ class MongoCRUDRepository(ICRUDRepository):
         collection_provider: CollectionProvider | None = None,
     ) -> None:
         self._model_cls = model_cls
-        self._resolve_collection = _make_collection_resolver(
+        self._resolve_collection = make_collection_resolver(
             collection,
             collection_provider,
             model_cls.table_name(),
@@ -165,48 +149,3 @@ class MongoCRUDRepository(ICRUDRepository):
         result = self.collection.delete_one(_build_id_filter(record_id))
         if result.deleted_count == 0:
             raise NotFoundError(f"Record '{record_id}' not found")
-
-
-class MongoActivityLogger(IActivityLogger):
-    """Fail-safe audit trail logger writing to the MongoDB 'activity_logs' collection."""
-
-    def __init__(
-        self,
-        *,
-        collection: Any | None = None,
-        collection_provider: CollectionProvider | None = None,
-    ) -> None:
-        self._resolve_collection = _make_collection_resolver(
-            collection,
-            collection_provider,
-            "activity_logs",
-        )
-
-    @property
-    def collection(self) -> Any:
-        return self._resolve_collection()
-
-    def record(
-        self,
-        *,
-        user_id: int | None,
-        action: str,
-        resource: str,
-        status: str,
-        ip_address: str = "",
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        try:
-            self.collection.insert_one(
-                {
-                    "user_id": user_id,
-                    "action": action,
-                    "resource": resource,
-                    "status": status,
-                    "ip_address": ip_address,
-                    "metadata": metadata or {},
-                    "created_at": datetime.now(UTC),
-                }
-            )
-        except (PyMongoError, OSError):
-            logger.warning("MongoDB activity log write failed for action=%s", action, exc_info=True)
