@@ -32,4 +32,14 @@ line-length = 100
 exclude = ["src/infrastructure/database/postgres/migrations"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "S", "SIM", "RET"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/tests/**/*.py" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+exclude = ["src/infrastructure/database/postgres/migrations"]

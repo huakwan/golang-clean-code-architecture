@@ -3,7 +3,7 @@
 PORT ?= 8000
 UV ?= uv
 
-.PHONY: help env install migrate makemigrations run dev test test-unit test-integration test-cov lint format check clean
+.PHONY: help env install migrate makemigrations run dev test test-unit test-integration test-cov lint format typecheck check clean
 
 help: ## Show available backend commands
 	@awk 'BEGIN {FS = ":.*## "; printf "\nBackend targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -43,7 +43,11 @@ lint: ## Run ruff linter on src/
 format: ## Format Python code with ruff
 	$(UV) run ruff format src
 
-check: lint test ## Run linter, bytecode check, and test suite
+typecheck: ## Run mypy static type checker (requires mypy in environment)
+	$(UV) run mypy src
+
+check: lint test ## Run linter, format check, bytecode check, and test suite
+	$(UV) run ruff format --check src
 	$(UV) run python -m compileall -q src
 
 clean: ## Remove Python caches and coverage artifacts
