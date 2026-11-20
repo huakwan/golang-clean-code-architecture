@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import time
+import uuid
 from typing import Any
 
 import jwt
@@ -9,6 +12,18 @@ from src.domain.entities.user import ParsedTokenEntity, UserTokenClaimsEntity
 from src.domain.exceptions import AuthenticationError
 
 DEFAULT_AUDIENCE: tuple[str, ...] = ("user", "admin")
+ACCESS_TOKEN_SUBJECT = "access-token"  # noqa: S105
+REFRESH_TOKEN_SUBJECT = "refresh-token"  # noqa: S105
+
+
+def hash_token(raw_token: str) -> str:
+    """Return the hex SHA-256 digest of a raw JWT for secure persistence."""
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def verify_token_hash(raw_token: str, stored_hash: str) -> bool:
+    """Compare a raw JWT against its stored SHA-256 digest in constant time."""
+    return hmac.compare_digest(hash_token(raw_token), stored_hash)
 
 
 class JWTAuthenticator:
@@ -39,6 +54,7 @@ class JWTAuthenticator:
             "iss": self._issuer,
             "sub": subject,
             "aud": list(DEFAULT_AUDIENCE),
+            "jti": uuid.uuid4().hex,
             "exp": exp,
             "nbf": now,
             "iat": now,
@@ -49,12 +65,17 @@ class JWTAuthenticator:
 
     def create_access_token(self, claims: UserTokenClaimsEntity) -> str:
         now = int(time.time())
-        payload = self._build_payload(claims, "access-token", now + self._access_expires, now)
+        payload = self._build_payload(claims, ACCESS_TOKEN_SUBJECT, now + self._access_expires, now)
         return self._encode(payload)
 
     def create_refresh_token(self, claims: UserTokenClaimsEntity) -> str:
         now = int(time.time())
-        payload = self._build_payload(claims, "refresh-token", now + self._refresh_expires, now)
+        payload = self._build_payload(
+            claims,
+            REFRESH_TOKEN_SUBJECT,
+            now + self._refresh_expires,
+            now,
+        )
         return self._encode(payload)
 
     def repeat_refresh_token(
@@ -63,11 +84,16 @@ class JWTAuthenticator:
         original_exp: int,
     ) -> str:
         now = int(time.time())
-        payload = self._build_payload(claims, "refresh-token", original_exp, now)
+        payload = self._build_payload(claims, REFRESH_TOKEN_SUBJECT, original_exp, now)
         return self._encode(payload)
 
-    def parse_token(self, raw_token: str) -> ParsedTokenEntity:
-        token = raw_token.removeprefix("Bearer ").strip()
+    def parse_token(
+        self,
+        raw_token: str,
+        *,
+        expected_sub: str | None = None,
+    ) -> ParsedTokenEntity:
+        token = raw_token.strip()
         if not token:
             raise AuthenticationError("token format is invalid")
 
@@ -76,7 +102,9 @@ class JWTAuthenticator:
                 token,
                 self._secret_key,
                 algorithms=["HS256"],
-                options={"verify_aud": False},
+                issuer=self._issuer,
+                audience=list(DEFAULT_AUDIENCE),
+                options={"require": ["exp", "iat", "iss", "aud", "sub"]},
             )
         except jwt.ExpiredSignatureError as exc:
             raise AuthenticationError("token had expired") from exc
@@ -89,6 +117,10 @@ class JWTAuthenticator:
         if not isinstance(claims_dict, dict) or "id" not in claims_dict:
             raise AuthenticationError("token format is invalid")
 
+        raw_id = claims_dict["id"]
+        if isinstance(raw_id, bool):
+            raise AuthenticationError("token format is invalid")
+
         raw_aud = decoded.get("aud", [])
         if isinstance(raw_aud, str):
             audience = [raw_aud]
@@ -97,8 +129,12 @@ class JWTAuthenticator:
         else:
             raise AuthenticationError("token format is invalid")
 
+        sub = str(decoded.get("sub", ""))
+        if expected_sub is not None and sub != expected_sub:
+            raise AuthenticationError("token type is invalid")
+
         try:
-            user_id = int(claims_dict["id"])
+            user_id = int(raw_id)
             exp = int(decoded["exp"])
             iat = int(decoded["iat"])
             nbf = int(decoded.get("nbf", iat))
@@ -107,10 +143,11 @@ class JWTAuthenticator:
 
         return ParsedTokenEntity(
             claims=UserTokenClaimsEntity(id=user_id),
-            sub=str(decoded.get("sub", "")),
+            sub=sub,
             iss=str(decoded.get("iss", "")),
             aud=audience,
             exp=exp,
             iat=iat,
             nbf=nbf,
+            jti=str(decoded.get("jti", "")),
         )

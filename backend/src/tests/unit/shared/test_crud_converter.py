@@ -15,6 +15,9 @@ from src.shared.crud.converter import convert_name_to_crud_slug
         ("UserModel", "user-model"),
         ("UserTokenModel", "user-token-model"),
         ("ActivityLogDocument", "activity-log-document"),
+        ("APIKey", "api-key"),
+        ("HTTPResponseCode", "http-response-code"),
+        ("User2Profile", "user2-profile"),
     ],
 )
 def test_convert_name_to_crud_slug(raw: str, expected: str) -> None:

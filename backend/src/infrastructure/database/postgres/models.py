@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from django.db import models
 
-from src.domain.entities.crud import ALL_CRUD_OPERATIONS, DatasourceType, ICRUDDataModel
+from src.domain.entities.crud import (
+    ALL_CRUD_OPERATIONS,
+    READ_ONLY_CRUD_OPERATIONS,
+    DatasourceType,
+)
 
 
 class _PostgresCRUDMixin:
@@ -11,7 +15,7 @@ class _PostgresCRUDMixin:
         return DatasourceType.POSTGRESQL
 
     @classmethod
-    def allowed_operations(cls) -> frozenset[str]:
+    def allowed_operations(cls, permission: str | None = None) -> frozenset[str]:
         return ALL_CRUD_OPERATIONS
 
 
@@ -35,14 +39,11 @@ class UserModel(_PostgresCRUDMixin, models.Model):
 
 class UserTokenModel(_PostgresCRUDMixin, models.Model):
     id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(
+    user = models.OneToOneField(
         UserModel,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
         db_column="user_id",
-        db_index=True,
-        related_name="tokens",
+        related_name="token",
     )
     access = models.TextField()
     refresh = models.TextField()
@@ -56,14 +57,16 @@ class UserTokenModel(_PostgresCRUDMixin, models.Model):
     def table_name(cls) -> str:
         return "user_tokens"
 
+    @classmethod
+    def allowed_operations(cls, permission: str | None = None) -> frozenset[str]:
+        return READ_ONLY_CRUD_OPERATIONS
+
 
 class UserPermissionModel(_PostgresCRUDMixin, models.Model):
     id = models.AutoField(primary_key=True)
     user = models.ForeignKey(
         UserModel,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.CASCADE,
         db_column="user_id",
         db_index=True,
         related_name="permissions",
@@ -78,8 +81,3 @@ class UserPermissionModel(_PostgresCRUDMixin, models.Model):
     @classmethod
     def table_name(cls) -> str:
         return "user_permissions"
-
-
-ICRUDDataModel.register(UserModel)
-ICRUDDataModel.register(UserTokenModel)
-ICRUDDataModel.register(UserPermissionModel)

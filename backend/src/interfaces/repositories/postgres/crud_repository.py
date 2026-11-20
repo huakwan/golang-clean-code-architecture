@@ -65,11 +65,17 @@ class PostgresCRUDRepository(ICRUDRepository):
     def __init__(self, model_cls: type[models.Model]) -> None:
         self._model_cls = model_cls
 
-    def _parse_pk(self, record_id: str) -> int:
+    def _parse_pk(self, record_id: str) -> Any:
+        pk_field = self._model_cls._meta.pk
+        if pk_field is None:
+            raise ValidationError("Model does not define a primary key")
         try:
-            return int(record_id)
-        except (TypeError, ValueError) as exc:
+            parsed = pk_field.to_python(record_id)
+        except (TypeError, ValueError, DjangoValidationError) as exc:
             raise ValidationError(f"Invalid record id: '{record_id}'") from exc
+        if parsed is None:
+            raise ValidationError(f"Invalid record id: '{record_id}'")
+        return parsed
 
     def _extract_writable_fields(
         self,
@@ -82,6 +88,15 @@ class PostgresCRUDRepository(ICRUDRepository):
             if _is_readonly_field(field):
                 continue
 
+            if field.name == "password":
+                raw_password = payload.get("password")
+                if not isinstance(raw_password, str) or not raw_password.strip():
+                    if is_create:
+                        raise ValidationError("password is required")
+                    continue
+                writable["password"] = hash_password(raw_password)
+                continue
+
             if field.is_relation:
                 if field.attname in payload:
                     writable[field.attname] = payload[field.attname]
@@ -89,12 +104,8 @@ class PostgresCRUDRepository(ICRUDRepository):
                     writable[field.attname] = payload[field.name]
             elif field.name in payload:
                 val = payload[field.name]
-                if field.name == "password":
-                    if not isinstance(val, str) or not val.strip():
-                        if is_create:
-                            raise ValidationError("password is required")
-                        continue
-                    val = hash_password(val)
+                if field.name == "email" and isinstance(val, str):
+                    val = val.strip().lower()
                 writable[field.name] = val
         return writable
 
@@ -143,7 +154,9 @@ class PostgresCRUDRepository(ICRUDRepository):
         data = self._extract_writable_fields(payload, is_create=True)
         try:
             with transaction.atomic():
-                instance = self._model_cls.objects.create(**data)
+                instance = self._model_cls(**data)
+                instance.full_clean(validate_unique=False)
+                instance.save()
         except IntegrityError as exc:
             raise ConflictError("Record violates a unique or relational constraint") from exc
         except (TypeError, ValueError, DjangoValidationError) as exc:
@@ -163,11 +176,14 @@ class PostgresCRUDRepository(ICRUDRepository):
             raise NotFoundError(f"Record '{record_id}' not found")
 
         data = self._extract_writable_fields(payload, is_create=False)
-        for key, value in data.items():
-            setattr(instance, key, value)
+        if not data:
+            raise ValidationError("No updatable fields provided")
 
         try:
             with transaction.atomic():
+                for key, value in data.items():
+                    setattr(instance, key, value)
+                instance.full_clean(validate_unique=False)
                 instance.save()
         except IntegrityError as exc:
             raise ConflictError("Record violates a unique or relational constraint") from exc

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass
 from datetime import date, datetime
+from functools import lru_cache
 from typing import Any, get_args, get_origin, get_type_hints
 
 from src.shared.crud.constants import SENSITIVE_FIELD_NAMES
@@ -78,9 +80,13 @@ def _django_model_fields(
         internal_type = field.get_internal_type()
         if internal_type in ("ForeignKey", "OneToOneField") and field.related_model is not None:
             related = field.related_model
+            target_field = getattr(field, "target_field", None)
+            target_type = (
+                target_field.get_internal_type() if target_field is not None else "AutoField"
+            )
             entry: dict[str, Any] = {
                 "name": field.attname,
-                "type": "int",
+                "type": _DJANGO_FIELD_TYPE_MAP.get(target_type, "int"),
             }
             avro_fields.append(entry)
             if related not in visited:
@@ -137,6 +143,11 @@ def _build_schema(model_cls: type[Any], visited: frozenset[type[Any]]) -> dict[s
     }
 
 
+@lru_cache(maxsize=64)
+def _generate_avro_schema_cached(model_cls: type[Any]) -> dict[str, Any]:
+    return _build_schema(model_cls, frozenset({model_cls}))
+
+
 def generate_avro_schema(model_cls: type[Any]) -> dict[str, Any]:
     """Generate an Avro-style record schema dictionary for a Django Model or dataclass."""
-    return _build_schema(model_cls, frozenset({model_cls}))
+    return copy.deepcopy(_generate_avro_schema_cached(model_cls))

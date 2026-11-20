@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 
 from src.domain.entities.user import (
@@ -19,6 +20,10 @@ class StoredUserRecord:
 
 
 class IUserRepository(ABC):
+    def atomic(self) -> AbstractContextManager[None]:
+        """Run a sequence of repository operations atomically."""
+        return nullcontext()
+
     @abstractmethod
     def get_user_by_email(self, email: str) -> StoredUserRecord | None:
         """Fetch user and password hash by email, or None if not found."""
@@ -46,7 +51,12 @@ class IUserRepository(ABC):
         """Insert or update the active token pair for a user."""
 
     @abstractmethod
-    def find_one_oauth_by_user_id(self, user_id: int) -> UserTokenEntity | None:
+    def find_one_oauth_by_user_id(
+        self,
+        user_id: int,
+        *,
+        for_update: bool = False,
+    ) -> UserTokenEntity | None:
         """Fetch the stored token pair for a user, or None if not found."""
 
     @abstractmethod

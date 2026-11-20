@@ -53,10 +53,7 @@ class InMemoryMongoCollection:
         self.docs: list[dict[str, Any]] = []
 
     def _matches(self, doc: dict[str, Any], query: dict[str, Any]) -> bool:
-        for key, value in query.items():
-            if doc.get(key) != value:
-                return False
-        return True
+        return all(doc.get(key) == value for key, value in query.items())
 
     def insert_one(self, document: dict[str, Any]) -> _InsertOneResult:
         stored = dict(document)
@@ -90,6 +87,15 @@ class InMemoryMongoCollection:
                 del self.docs[idx]
                 return _DeleteResult(deleted_count=1)
         return _DeleteResult(deleted_count=0)
+
+
+@pytest.fixture(autouse=True)
+def _clear_django_cache():
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture

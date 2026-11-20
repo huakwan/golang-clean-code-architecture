@@ -23,3 +23,7 @@ class ConflictError(DomainError):
 
 class OperationNotAllowedError(DomainError):
     """Raised when a CRUD operation is disallowed by the model's contract."""
+
+
+class DatabaseError(DomainError):
+    """Raised when an underlying datasource operation fails unexpectedly."""

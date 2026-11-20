@@ -4,7 +4,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from src.domain.entities.crud import DatasourceType, ICRUDDataModel
+from src.domain.entities.crud import (
+    ADMIN_PERMISSION,
+    READ_ONLY_CRUD_OPERATIONS,
+    DatasourceType,
+    ICRUDDataModel,
+)
 
 
 @dataclass(frozen=True)
@@ -29,5 +34,7 @@ class ActivityLogDocument(ICRUDDataModel):
         return DatasourceType.MONGODB
 
     @classmethod
-    def allowed_operations(cls) -> frozenset[str]:
-        return frozenset({"read", "delete"})
+    def allowed_operations(cls, permission: str | None = None) -> frozenset[str]:
+        if permission == ADMIN_PERMISSION:
+            return frozenset({"read", "delete"})
+        return READ_ONLY_CRUD_OPERATIONS

@@ -15,9 +15,11 @@ from src.domain.entities.crud import (
 from src.domain.entities.monitor import MonitorEntity
 from src.domain.entities.user import (
     UserEntity,
+    UserLoginRequest,
     UserLoginResponse,
     UserRegisterRequest,
     UserTokenEntity,
+    normalize_email,
 )
 
 
@@ -44,6 +46,10 @@ def test_domain_layer_has_zero_framework_imports() -> None:
         "user@example.com",
         "john.doe@sub.domain.org",
         "first-last_1@company.io",
+        "user+tag@example.com",
+        "admin@company.cloud",
+        "dev@platform.technology",
+        "Mixed.Case@Example.COM",
     ],
 )
 def test_register_request_valid_emails(email: str) -> None:
@@ -64,7 +70,13 @@ def test_register_request_valid_emails(email: str) -> None:
         "@missinguser.com",
         "user@",
         "user@domain",
-        "user@domain.toolongtld",
+        "user@domain.a",
+        "user@domain.123",
+        "user..dot@example.com",
+        ".leading@example.com",
+        "user@-bad.com",
+        "user@bad..com",
+        "a" * 65 + "@example.com",
     ],
 )
 def test_register_request_invalid_emails(email: str) -> None:
@@ -75,6 +87,14 @@ def test_register_request_invalid_emails(email: str) -> None:
         last_name="Doe",
     )
     assert req.is_valid_email() is False
+
+
+def test_email_normalization_on_requests() -> None:
+    assert normalize_email("  Alice@Example.COM  ") == "alice@example.com"
+    reg = UserRegisterRequest("  Alice@Example.COM  ", "secret", "Alice", "Smith")
+    login = UserLoginRequest("  Alice@Example.COM  ", "secret")
+    assert reg.normalized_email() == "alice@example.com"
+    assert login.normalized_email() == "alice@example.com"
 
 
 def test_user_entity_and_login_response_serialization() -> None:
@@ -133,3 +153,14 @@ def test_data_list_response_serialization() -> None:
 
     single = DataResponse(code=0, data={"id": 1}, message="", data_schema=None)
     assert single.to_dict() == {"code": 0, "data": {"id": 1}, "message": "", "data_schema": None}
+
+
+def test_crud_data_model_is_runtime_checkable_protocol() -> None:
+    from typing import Protocol
+
+    from src.infrastructure.database.postgres.models import UserModel
+
+    assert issubclass(ICRUDDataModel, Protocol)  # type: ignore[arg-type]
+    assert getattr(ICRUDDataModel, "_is_protocol", False) is True
+    assert getattr(ICRUDDataModel, "_is_runtime_protocol", False) is True
+    assert isinstance(UserModel(), ICRUDDataModel)

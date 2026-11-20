@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from src.config.crud_models import get_crud_model_registry, list_registered_models
 from src.config.env_config import AppConfig, get_config
 from src.infrastructure.database.mongodb.connector import MongoDBConnector
-from src.interfaces.repositories.crud.factory import get_crud_repository
+from src.interfaces.repositories.crud.factory import build_crud_repository
 from src.interfaces.repositories.mongodb.activity_logger import MongoActivityLogger
 from src.interfaces.repositories.postgres.user_repository import PostgresUserRepository
 from src.shared.authentication.jwt_authentication import JWTAuthenticator
@@ -33,10 +34,12 @@ class AppContainer:
             activity_logger=self.activity_logger,
         )
         self.crud_usecase = CrudUsecase(
-            repo_factory=lambda slug: get_crud_repository(
+            repo_factory=lambda slug: build_crud_repository(
                 slug,
+                registry=get_crud_model_registry(),
                 mongo_collection_provider=MongoDBConnector.get_collection,
-            )
+            ),
+            model_lister=list_registered_models,
         )
 
 

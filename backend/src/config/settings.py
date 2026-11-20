@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from src.config.env_config import get_config
@@ -49,7 +48,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "src.config.wsgi.application"
 ASGI_APPLICATION = "src.config.asgi.application"
 
-if os.getenv("DJANGO_USE_SQLITE", "").lower() in {"1", "true", "yes"}:
+if _cfg.use_sqlite:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -78,10 +77,22 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 
 CORS_ALLOWED_ORIGINS = list(_cfg.cors_allowed_origins)
 CORS_ALLOW_CREDENTIALS = True
+TRUSTED_PROXIES = _cfg.trusted_proxies
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "src.infrastructure.django_app.authentication.CustomJWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "src.infrastructure.django_app.throttling.ClientIPScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_register": _cfg.throttle_auth_register,
+        "auth_login": _cfg.throttle_auth_login,
+        "auth_refresh": _cfg.throttle_auth_refresh,
+        "auth_logout": _cfg.throttle_auth_logout,
+    },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": (
         "src.interfaces.handlers.django.entities.response.custom_exception_handler"

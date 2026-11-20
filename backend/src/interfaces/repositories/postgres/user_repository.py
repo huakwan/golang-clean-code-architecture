@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
+
 from django.db import IntegrityError, transaction
 
 from src.domain.entities.user import (
@@ -29,6 +31,9 @@ def _to_user_entity(model: UserModel) -> UserEntity:
 
 
 class PostgresUserRepository(IUserRepository):
+    def atomic(self) -> AbstractContextManager[None]:
+        return transaction.atomic()
+
     def get_user_by_email(self, email: str) -> StoredUserRecord | None:
         record = UserModel.objects.filter(email=email).first()
         if record is None:
@@ -70,21 +75,23 @@ class PostgresUserRepository(IUserRepository):
         )
 
     def upsert_oauth(self, user_id: int, access_token: str, refresh_token: str) -> UserTokenEntity:
-        existing = UserTokenModel.objects.filter(user_id=user_id).first()
-        if existing is not None:
-            existing.access = access_token
-            existing.refresh = refresh_token
-            existing.save(update_fields=["access", "refresh", "updated_at"])
-        else:
-            UserTokenModel.objects.create(
+        with transaction.atomic():
+            UserTokenModel.objects.update_or_create(
                 user_id=user_id,
-                access=access_token,
-                refresh=refresh_token,
+                defaults={"access": access_token, "refresh": refresh_token},
             )
         return UserTokenEntity(access=access_token, refresh=refresh_token)
 
-    def find_one_oauth_by_user_id(self, user_id: int) -> UserTokenEntity | None:
-        record = UserTokenModel.objects.filter(user_id=user_id).first()
+    def find_one_oauth_by_user_id(
+        self,
+        user_id: int,
+        *,
+        for_update: bool = False,
+    ) -> UserTokenEntity | None:
+        qs = UserTokenModel.objects.filter(user_id=user_id)
+        if for_update:
+            qs = qs.select_for_update()
+        record = qs.first()
         if record is None:
             return None
         return UserTokenEntity(access=record.access, refresh=record.refresh)
@@ -108,7 +115,7 @@ class PostgresUserRepository(IUserRepository):
             return None
         return UserPermissionEntity(
             id=record.id,
-            user_id=record.user_id or user_id,
+            user_id=record.user_id,
             permission=record.permission,
             updated_at=format_iso_datetime(record.updated_at),
         )

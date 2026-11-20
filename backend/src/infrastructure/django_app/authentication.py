@@ -49,12 +49,15 @@ class CustomJWTAuthentication(BaseAuthentication):
         if not auth_header.startswith("Bearer "):
             raise AuthenticationFailed("token format is invalid")
 
+        token = auth_header.removeprefix("Bearer ").strip()
+        if not token:
+            raise AuthenticationFailed("token format is invalid")
+
         try:
-            user_entity, permission = self._get_user_usecase().authenticate(auth_header)
+            user_entity, permission = self._get_user_usecase().authenticate(token)
         except AuthenticationError as exc:
             raise AuthenticationFailed(str(exc)) from exc
 
-        token = auth_header.removeprefix("Bearer ").strip()
         return AuthenticatedUser(entity=user_entity, permission=permission), token
 
     def authenticate_header(self, request: Request) -> str:

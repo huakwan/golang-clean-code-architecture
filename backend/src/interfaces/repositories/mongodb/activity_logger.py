@@ -9,6 +9,7 @@ from pymongo.errors import PyMongoError
 from src.domain.repositories.activity_logger import IActivityLogger
 from src.interfaces.repositories.mongodb.collection import (
     CollectionProvider,
+    MongoCollectionProtocol,
     make_collection_resolver,
 )
 
@@ -21,7 +22,7 @@ class MongoActivityLogger(IActivityLogger):
     def __init__(
         self,
         *,
-        collection: Any | None = None,
+        collection: MongoCollectionProtocol | None = None,
         collection_provider: CollectionProvider | None = None,
     ) -> None:
         self._resolve_collection = make_collection_resolver(
@@ -31,7 +32,7 @@ class MongoActivityLogger(IActivityLogger):
         )
 
     @property
-    def collection(self) -> Any:
+    def collection(self) -> MongoCollectionProtocol:
         return self._resolve_collection()
 
     def record(
