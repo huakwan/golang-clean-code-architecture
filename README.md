@@ -9,18 +9,18 @@ Re-implementation of Uncle Bob's Clean Architecture from the original Go templat
 ```text
 golang-clean-code-architecture/
 ├── backend/                  # Python + Django + DRF Clean Architecture API (:8000)
-│   ├── Makefile              # Automation targets (run, migrate, test, lint, check)
-│   ├── pyproject.toml        # uv dependencies, Python >=3.12,<3.14, ruff config
+│   ├── Makefile              # Automation targets (run, migrate, test, lint, typecheck, check)
+│   ├── pyproject.toml        # uv dependencies, Python >=3.12,<3.14, ruff & mypy config
 │   ├── uv.lock
 │   ├── manage.py
 │   ├── pytest.ini
 │   ├── env.template
 │   └── src/
 │       ├── config/           # env_config, settings, test_settings, urls, crud_models registry
-│       ├── domain/           # Pure Python dataclasses, StrEnum, ABCs (zero framework imports)
+│       ├── domain/           # Pure Python dataclasses, StrEnum, Protocol, ABCs (zero framework imports)
 │       ├── usecases/         # UserUsecase, CrudUsecase
 │       ├── interfaces/       # DRF APIView handlers + PostgreSQL & MongoDB repositories
-│       ├── infrastructure/   # Django ORM models/migrations, Mongo connector, DI container, JWT auth, middlewares
+│       ├── infrastructure/   # Django ORM models/migrations, Mongo connector, DI container, JWT auth, throttling, X-Request-ID middlewares
 │       ├── shared/           # HS256 JWT, bcrypt, slug converter, Avro schema generator, utils
 │       └── tests/            # Unit tests (domain/shared/usecases/interfaces) & integration tests
 ├── frontend/                 # Vue 3 + Vite + TypeScript + Pinia + Vue Router + Axios + Tailwind (:5173)
@@ -68,20 +68,22 @@ docker compose up -d
 ## Backend (Python — Django + DRF, `:8000`)
 
 ### Features
-- **Clean Architecture Layers**: strict inward dependency rules (`domain/` has zero Django/DRF/PyMongo imports, verified by AST unit test).
+- **Clean Architecture Layers**: strict inward dependency rules verified by AST unit tests (`domain/` has zero Django/DRF/PyMongo imports; `interfaces/handlers/` and `crud/factory.py` have zero `infrastructure`/`config` imports).
 - **User Management & JWT Auth (HS256)**:
-  - Register (email regex validation, `bcrypt` hashing, auto-creates default `user_permissions` record)
-  - Login (`access` + `refresh` tokens persisted in `user_tokens` via upsert)
-  - Refresh Token (validates DB session, rotates `access` token, preserves original `refresh` token expiry)
-  - Logout (revokes `user_tokens` session)
-  - Profile (`GET /api/v1/users/profile` via Bearer JWT)
+  - Register (ReDoS-safe email validation + lowercase normalization, `bcrypt` hashing, atomic creation of user + default `user_permissions` record)
+  - Login (timing-safe `bcrypt` verification, HS256 `access` + `refresh` JWTs with unique `jti`, persisted as SHA-256 hashes in `user_tokens` via `OneToOneField` + `CASCADE`)
+  - Refresh Token (row-locked DB session validation via constant-time hash comparison, strict `sub`/`iss`/`aud` JWT verification, rotates `access` token while preserving original `refresh` expiry)
+  - Logout (verifies `refresh_token` and revokes `user_tokens` session)
+  - Profile (`GET /api/v1/users/profile` via Bearer JWT, returning user identity and `permission`)
+  - Security defaults & throttling: fail-closed DRF defaults (`IsAuthenticated`), spoofing-resistant client IP resolution (`APP_TRUSTED_PROXIES`), and IP-scoped auth rate limiting (`ClientIPScopedRateThrottle`, `APP_THROTTLE_AUTH_*`)
   - Automatic fail-safe audit logging of auth events (`USER_REGISTER`, `USER_LOGIN`, `USER_REFRESH_TOKEN`, `USER_LOGOUT`) into MongoDB `activity_logs`
 - **Polyglot Dynamic CRUD Engine (`/api/v1/data/<slug>/...`)**:
   - Model registry (`src/config/crud_models.py`) routing slugs to **PostgreSQL** (`users`, `user-tokens`, `user-permissions`) or **MongoDB** (`activity-logs`)
-  - Model discovery (`GET /api/v1/data/models/`) returning `slug`, `label`, `datasource`, and `allowed_operations`
-  - Automatic Avro Schema generation (`GET /api/v1/data/<slug>/describe`), hiding sensitive fields (`password`)
-  - Operation-level enforcement via `allowed_operations()` (`activity-logs` allows `read` and `delete` only; `POST`/`PUT` return `405 Method Not Allowed`)
-  - Accurate pagination (`_page`, `_pageSize`, max `1000`) using `count()` before slicing
+  - Model discovery (`GET /api/v1/data/models/`) returning `slug`, `label`, `datasource`, and caller-specific `allowed_operations`
+  - Automatic cached Avro Schema generation (`GET /api/v1/data/<slug>/describe`), hiding sensitive fields (`password`, `access`, `refresh` — recursively in MongoDB documents)
+  - Role- & model-based operation enforcement via `allowed_operations(permission)`: `user-tokens` is read-only for all roles; `activity-logs` is read-only for `user` and allows `delete` for `admin`; disallowed operations return `405 Method Not Allowed` (`crud-405`)
+  - Schema-validated filters & writes (Django `full_clean` + required `password` on PostgreSQL; dataclass field allowlist & type coercion blocking NoSQL `$`/`.` operator injection on MongoDB)
+  - Accurate bounded pagination (`_page` max `10000`, `_pageSize` max `1000`) using `count()` before slicing
 - **Interactive API Docs**: OpenAPI 3.0 + Swagger UI at `http://localhost:8000/swagger/`
 
 ### Setup & Run (with `uv`)
@@ -102,6 +104,7 @@ uv run python manage.py runserver 8000
 ```bash
 cd backend
 uv run ruff check src
+uv run ruff format --check src
 uv run python -m compileall -q src
 uv run pytest src/tests -v --cov=src/domain --cov=src/shared --cov=src/usecases --cov-report=term-missing
 ```
@@ -115,14 +118,14 @@ uv run pytest src/tests -v --cov=src/domain --cov=src/shared --cov=src/usecases 
 | `POST` | `/api/v1/users/login` | Public | Login and issue JWT `access` + `refresh` tokens |
 | `POST` | `/api/v1/users/refresh-token` | Public | Rotate `access` token using `refresh_token` |
 | `POST` | `/api/v1/users/logout` | Public | Revoke session tokens |
-| `GET` | `/api/v1/users/profile` | Bearer JWT | Get current authenticated user |
+| `GET` | `/api/v1/users/profile` | Bearer JWT | Get current authenticated user and `permission` |
 | `GET` | `/api/v1/data/models/` | Bearer JWT | List registered models, datasources & `allowed_operations` |
 | `GET` | `/api/v1/data/<slug>/describe` | Bearer JWT | Get Avro schema for entity |
 | `GET` | `/api/v1/data/<slug>/` | Bearer JWT | Paginated list (`_page`, `_pageSize`) with `data_schema` |
 | `POST` | `/api/v1/data/<slug>/` | Bearer JWT | Create record (`405` if disallowed) |
 | `GET` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Retrieve record by ID |
 | `PUT` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Update record by ID (`405` if disallowed) |
-| `DELETE` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Delete record by ID |
+| `DELETE` | `/api/v1/data/<slug>/<id>` | Bearer JWT | Delete record by ID (`405` if disallowed) |
 | `GET` | `/swagger/` | Public | Interactive Swagger UI |
 
 ---
@@ -137,7 +140,7 @@ Built with **Vue 3 (`<script setup lang="ts">`) + Vite + TypeScript + Pinia + Vu
 - **Dynamic Data Explorer (PostgreSQL & MongoDB)**:
   - Discovers registered models dynamically from `GET /api/v1/data/models/` with datasource badges (`postgresql` / `mongodb`).
   - Avro Schema viewer (`AvroSchemaViewer.vue`) and schema-driven table (`DynamicDataTable.vue`) with pagination and record detail modal.
-  - Schema-driven Create/Edit form modal (`DynamicFormModal.vue`) and Delete confirmation dialog, automatically gated by each model's `allowed_operations` (e.g., `activity-logs` shows View & Delete only).
+  - Schema-driven Create/Edit form modal (`DynamicFormModal.vue`) and Delete confirmation dialog, automatically gated by each model's `allowed_operations` (e.g., `user-tokens` is read-only; `activity-logs` is read-only for `user` and allows Delete for `admin`).
 
 ### Setup & Run Frontend
 
